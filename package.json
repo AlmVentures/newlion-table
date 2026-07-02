@@ -1,6 +1,6 @@
 {
   "name": "@newlion/table",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "A reusable, data-agnostic data table shell for React, built on TanStack Table and shadcn/ui.",
   "license": "MIT",

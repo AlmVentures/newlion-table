@@ -11,6 +11,7 @@ import {
 } from 'zustand/middleware';
 
 export const TABLE_PREFERENCE_VERSION = 1;
+export const DEFAULT_SORTING: SortingState = [];
 
 export type TablePreferenceState = {
   columnFilters: ColumnFiltersState;
@@ -64,12 +65,20 @@ export const useTablePreferencesStore = create<TablePreferencesStore>()(
     (set) => ({
       tables: {},
       setTableState: (tableId, tableState) => {
-        set((state) => ({
-          tables: {
-            ...state.tables,
-            [tableId]: normalizeTablePreferenceState(tableState, []),
-          },
-        }));
+        set((state) => {
+          const nextTableState = normalizeTablePreferenceState(tableState, DEFAULT_SORTING);
+          const currentTableState = state.tables[tableId];
+          if (currentTableState && tablePreferenceStatesEqual(currentTableState, nextTableState)) {
+            return state;
+          }
+
+          return {
+            tables: {
+              ...state.tables,
+              [tableId]: nextTableState,
+            },
+          };
+        });
       },
     }),
     {
@@ -145,4 +154,49 @@ function normalizeColumnFilters(value: unknown): ColumnFiltersState {
       value: item.value.filter((filterValue) => typeof filterValue === 'string'),
     }))
     .filter((item) => item.value.length > 0);
+}
+
+function tablePreferenceStatesEqual(
+  left: TablePreferenceState,
+  right: TablePreferenceState,
+): boolean {
+  return left.version === right.version
+    && sortingStatesEqual(left.sorting, right.sorting)
+    && columnVisibilityStatesEqual(left.columnVisibility, right.columnVisibility)
+    && columnFilterStatesEqual(left.columnFilters, right.columnFilters);
+}
+
+export function sortingStatesEqual(left: SortingState, right: SortingState): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const leftItem = left[index];
+    const rightItem = right[index];
+    if (!leftItem || !rightItem || leftItem.id !== rightItem.id || leftItem.desc !== rightItem.desc) return false;
+  }
+  return true;
+}
+
+function columnVisibilityStatesEqual(left: VisibilityState, right: VisibilityState): boolean {
+  const leftEntries = Object.entries(left);
+  const rightEntries = Object.entries(right);
+  if (leftEntries.length !== rightEntries.length) return false;
+  for (const [key, value] of leftEntries) {
+    if (right[key] !== value) return false;
+  }
+  return true;
+}
+
+function columnFilterStatesEqual(left: ColumnFiltersState, right: ColumnFiltersState): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const leftItem = left[index];
+    const rightItem = right[index];
+    if (!leftItem || !rightItem || leftItem.id !== rightItem.id) return false;
+    if (!Array.isArray(leftItem.value) || !Array.isArray(rightItem.value)) return false;
+    if (leftItem.value.length !== rightItem.value.length) return false;
+    for (let valueIndex = 0; valueIndex < leftItem.value.length; valueIndex += 1) {
+      if (leftItem.value[valueIndex] !== rightItem.value[valueIndex]) return false;
+    }
+  }
+  return true;
 }

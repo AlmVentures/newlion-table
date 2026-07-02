@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   flexRender,
   getCoreRowModel,
@@ -63,7 +63,9 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import {
+  DEFAULT_SORTING,
   normalizeTablePreferenceState,
+  sortingStatesEqual,
   useTablePreferencesStore,
 } from './table-preferences';
 import { ClearableSearchInput } from './clearable-search-input';
@@ -130,15 +132,17 @@ export const arrayIncludesSomeFilter: FilterFn<unknown> = (
   return filterValue.includes(String(rowValue));
 };
 
+const EMPTY_FACETED_FILTERS: DataTableFacetedFilter[] = [];
+
 export function DataTable<TData>({
   className,
   columns,
   data,
   emptyMessage,
-  facetedFilters = [],
+  facetedFilters = EMPTY_FACETED_FILTERS,
   getRowClassName,
   getRowId,
-  initialSorting = [],
+  initialSorting = DEFAULT_SORTING,
   loading = false,
   loadingMessage = 'Loading...',
   onRowClick,
@@ -156,9 +160,10 @@ export function DataTable<TData>({
     ?? createAutomaticTableId(columns, reactTableInstanceId);
   const storedTableState = useTablePreferencesStore((state) => state.tables[resolvedTableId]);
   const setTablePreferenceState = useTablePreferencesStore((state) => state.setTableState);
+  const stableInitialSorting = useStableSortingState(initialSorting);
   const tablePreferenceState = useMemo(
-    () => normalizeTablePreferenceState(storedTableState, initialSorting),
-    [initialSorting, storedTableState],
+    () => normalizeTablePreferenceState(storedTableState, stableInitialSorting),
+    [stableInitialSorting, storedTableState],
   );
   const { columnFilters, columnVisibility, sorting } = tablePreferenceState;
   const [globalFilter, setGlobalFilter] = useState(search?.value ?? '');
@@ -193,6 +198,8 @@ export function DataTable<TData>({
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table owns non-memoizable instance functions; the table instance stays local to this component.
   const table = useReactTable({
+    autoResetExpanded: false,
+    autoResetPageIndex: false,
     columns,
     data,
     enableGlobalFilter: search?.useTableGlobalFilter ?? false,
@@ -610,6 +617,14 @@ function resolveUpdater<TValue>(
   return typeof updater === 'function'
     ? (updater as (current: TValue) => TValue)(current)
     : updater;
+}
+
+function useStableSortingState(value: SortingState): SortingState {
+  const valueRef = useRef<SortingState>(value);
+  if (!sortingStatesEqual(valueRef.current, value)) {
+    valueRef.current = value;
+  }
+  return valueRef.current;
 }
 
 function getColumnLabel<TData>(column: Column<TData, unknown>): string {
